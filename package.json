@@ -1,0 +1,54 @@
+{
+  "name": "expo-ai-intents",
+  "version": "0.1.10",
+  "description": "Expo module for AI-powered app intents — exposes in-app functions to Android App Functions (Gemini, Google Assistant) and iOS App Intents (Siri, Shortcuts).",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "plugin": "plugin/build/index.js",
+  "files": [
+    "build/",
+    "plugin/build/",
+    "plugin/src/",
+    "app.plugin.js",
+    "expo-module.config.json",
+    "ios/",
+    "android/"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p plugin/tsconfig.json",
+    "postbuild": "",
+    "prepublishOnly": "npm run build",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "android",
+    "ios",
+    "app-functions",
+    "app-intents",
+    "appfunctions",
+    "ai",
+    "gemini",
+    "assistant",
+    "siri",
+    "shortcuts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anomalyco/expo-ai-intents.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "expo-modules-core": ">=2.3.0"
+  },
+  "peerDependencies": {
+    "expo": ">=55.0.0"
+  },
+  "devDependencies": {
+    "@expo/config-plugins": ">=55.0.0",
+    "@types/node": "^22.13.14",
+    "typescript": "^5"
+  }
+}

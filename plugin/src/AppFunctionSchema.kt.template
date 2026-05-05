@@ -1,0 +1,5 @@
+/** ${DESCRIPTION} */
+@AppFunctionSchemaDefinition(name = "${FUNCTION_NAME}", version = 1, category = "${CATEGORY}")
+interface ${INTERFACE_NAME} {
+${KDOC}    fun ${FUNCTION_NAME}(appFunctionContext: AppFunctionContext${PARAMETERS}): String
+}

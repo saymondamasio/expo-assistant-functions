@@ -1,0 +1,7 @@
+*.ts
+!*.d.ts
+tsconfig.json
+plugin/tsconfig.json
+.gitignore
+node_modules
+bun.lock

@@ -1,0 +1,10 @@
+{
+  "name": "expo-ai-intents",
+  "platforms": ["android", "apple"],
+  "android": {
+    "modules": ["expo.modules.appfunctions.AppFunctionsModule"]
+  },
+  "apple": {
+    "modules": ["ExpoAppIntentsModule"]
+  }
+}

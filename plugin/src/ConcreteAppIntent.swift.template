@@ -1,0 +1,21 @@
+import AppIntents
+import Foundation
+import ExpoAppIntents
+
+@available(iOS 16.0, *)
+struct ${INTENT_NAME}: AppIntent {
+    static let intentName = "${INTENT_NAME}"
+    static let title: LocalizedStringResource = "${INTENT_TITLE}"
+    static let description: String = "${INTENT_DESCRIPTION}"
+
+${PARAMETERS}
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<${RESULT_TYPE}?> {
+        let sendableParameters: [String: Any] = ExpoAppIntents.anyToDictionary(parent:self)
+
+        let rawResult: [String: Any]? = try await ExpoAppIntentsModule.shared()?
+            .postNotificationAndWait(name: Self.intentName, parameters: sendableParameters)
+
+        return .result(value: (rawResult?["value"] as? ${RESULT_TYPE}))
+    }
+}
