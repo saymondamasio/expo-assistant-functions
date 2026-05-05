@@ -1,7 +1,7 @@
 {
-  "name": "expo-ai-intents",
+  "name": "expo-assistant-functions",
   "version": "0.0.1",
-  "description": "Expo module for AI-powered app intents — exposes in-app functions to Android App Functions (Gemini, Google Assistant) and iOS App Intents (Siri, Shortcuts).",
+  "description": "Expo module for Assistant Functions — exposes in-app functions to Android App Functions (Gemini, Google Assistant) and iOS App Intents (Siri, Shortcuts).",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "plugin": "plugin/build/index.js",
@@ -36,7 +36,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/anomalyco/expo-ai-intents.git"
+    "url": "https://github.com/anomalyco/expo-assistant-functions.git"
   },
   "author": "",
   "license": "MIT",
