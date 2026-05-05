@@ -1,14 +1,11 @@
 name: Publish to npm
 
 on:
-  push:
-    branches: [main, master]
-    paths-ignore:
-      - "README.md"
-      - "LICENSE"
+  release:
+    types: [created]
 
 jobs:
-  publish:
+  build-and-publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,14 +19,6 @@ jobs:
 
       - run: npm run build
 
-      - name: Publish if version changed
-        run: |
-          LOCAL_VERSION=$(node -p "require('./package.json').version")
-          PUBLISHED_VERSION=$(npm view expo-ai-intents version 2>/dev/null || echo "0.0.0")
-          if [ "$LOCAL_VERSION" != "$PUBLISHED_VERSION" ]; then
-            npm publish --access public
-          else
-            echo "Version $LOCAL_VERSION already published. Skipping."
-          fi
+      - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
