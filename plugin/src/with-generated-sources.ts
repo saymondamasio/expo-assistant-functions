@@ -99,14 +99,38 @@ function generateAppFunctionsKotlin(
     const indexDts = join(buildDir, "index.d.ts");
     try {
       let contents = readFileSync(indexDts, "utf-8");
-      const appFuncIdx = contents.indexOf("export interface AppFunctionMap");
-      if (appFuncIdx !== -1 && tsContent.interfaces) {
-        contents = `${contents.slice(0, appFuncIdx)}${tsContent.interfaces}\n${contents.slice(appFuncIdx)}`;
+
+      // Remove previously generated block (idempotent)
+      const markerStart = "// === BEGIN expo-assistant-functions generated types ===";
+      const markerEnd = "// === END expo-assistant-functions generated types ===";
+      const startIdx = contents.indexOf(markerStart);
+      const endIdx = contents.indexOf(markerEnd);
+      if (startIdx !== -1 && endIdx !== -1) {
+        contents = `${contents.slice(0, startIdx)}${contents.slice(endIdx + markerEnd.length)}`;
       }
-      contents = contents.replace(
-        /(export interface AppFunctionMap \{)[^}]*(\})/s,
-        `$1\n${tsContent.mapEntries}\n$2`,
-      );
+
+      // Build new block
+      const generatedBlock = [
+        markerStart,
+        tsContent.interfaces ?? "",
+        `export interface AppFunctionMap {\n${tsContent.mapEntries}\n}`,
+        markerEnd,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      // Insert before the closing of the file, after the last export
+      const lastExportIdx = contents.lastIndexOf("export ");
+      if (lastExportIdx !== -1) {
+        const nextNewline = contents.indexOf("\n", lastExportIdx);
+        const insertIdx = contents.indexOf("\n", nextNewline + 1);
+        contents = insertIdx !== -1
+          ? `${contents.slice(0, insertIdx)}\n${generatedBlock}\n${contents.slice(insertIdx)}`
+          : `${contents}\n${generatedBlock}\n`;
+      } else {
+        contents = `${contents}\n${generatedBlock}\n`;
+      }
+
       writeFileSync(indexDts, contents);
     } catch { /* ok */ }
   }
