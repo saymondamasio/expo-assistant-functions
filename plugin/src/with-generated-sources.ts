@@ -7,7 +7,7 @@ import { generateTypesContent } from "./generate-app-functions-types";
 
 function findModuleSrcDir(projectRoot: string): string {
   const nodeRequire = createRequire(join(projectRoot, "package.json"));
-  const pkgPath = nodeRequire.resolve("expo-ai-intents/package.json");
+  const pkgPath = nodeRequire.resolve("expo-assistant-functions/package.json");
   return join(dirname(pkgPath), "src");
 }
 
@@ -89,11 +89,11 @@ function generateAppFunctionsKotlin(
 
     // Write separate gitignored file
     const header = `// Gerado automaticamente de app.json — NAO EDITE
-// Gerado por expo-ai-intents config plugin
+// Gerado por expo-assistant-functions config plugin
 
 `;
     const augContent = `${header}${tsContent.interfaces}\nexport interface AppFunctionMap {\n${tsContent.mapEntries}\n}\n`;
-    writeFileSync(join(buildDir, "expo-ai-intents.d.ts"), augContent);
+    writeFileSync(join(buildDir, "expo-assistant-functions.d.ts"), augContent);
 
     // Patch build/index.d.ts for actual TypeScript resolution
     const indexDts = join(buildDir, "index.d.ts");

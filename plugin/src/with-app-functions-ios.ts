@@ -12,7 +12,7 @@ function getTemplatePath(): string {
 		// biome-ignore lint: __dirname needed for CommonJS plugin
 		join(__dirname, "..", "package.json")
 	);
-	const pkgPath = nodeRequire.resolve("expo-ai-intents/package.json");
+	const pkgPath = nodeRequire.resolve("expo-assistant-functions/package.json");
 	return join(dirname(pkgPath), "plugin", "src", TEMPLATE_FILENAME);
 }
 
