@@ -6,7 +6,10 @@ import {
 	withDangerousMod,
 	withProjectBuildGradle,
 } from "expo/config-plugins";
-import type { AppFunctionsPluginProps } from "./app-functions.types";
+import type {
+	AppFunctionsPluginProps,
+	FunctionDefinition,
+} from "./app-functions.types";
 import { generateAppFunctionsKotlin } from "./with-generated-sources";
 
 const { addMetaDataItemToMainApplication, getMainApplicationOrThrow } =
@@ -88,21 +91,8 @@ function patchAndroidManifest(
 		);
 	}
 
-	const permissions = manifest.manifest?.["uses-permission"] ?? [];
-	const hasPermission = permissions.some(
-		(p: { $?: Record<string, string> }) =>
-			p.$?.["android:name"] === "android.permission.EXECUTE_APP_FUNCTIONS"
-	);
-
-	if (!hasPermission) {
-		manifest.manifest = {
-			...manifest.manifest,
-			"uses-permission": [
-				...permissions,
-				{ $: { "android:name": "android.permission.EXECUTE_APP_FUNCTIONS" } },
-			],
-		};
-	}
+	// EXECUTE_APP_FUNCTIONS is for caller apps (agents) that invoke other packages'
+	// functions — not required for the publishing app. See developer.android.com/ai/appfunctions
 
 	// Register ContentProvider bridge
 	const mainAppAny = mainApp as Record<string, unknown>;
@@ -219,22 +209,88 @@ const MAIN_APP_CLASS_SIMPLE =
 	/(class\s+MainApplication\s*:\s*Application\s*\(\s*\)\s*)\{/;
 const MAIN_APP_CLASS_ANY = /(class\s+MainApplication[^{]*)\{/;
 const IMPORT_APPFUNCTION =
-	"import androidx.appfunctions.service.AppFunctionConfiguration;\n";
-const PROVIDER_CONFIG = `
-    override val appFunctionConfiguration: AppFunctionConfiguration
-        get() = AppFunctionConfiguration.Builder().build()`;
+	"import androidx.appfunctions.service.AppFunctionConfiguration\n";
 
-function patchMainApplication(src: string): string {
-	if (src.includes("AppFunctionConfiguration")) {
+const APPFUNCTION_CONFIG_REGION_START =
+	"// expo-assistant-functions AppFunctionConfiguration start";
+const APPFUNCTION_CONFIG_REGION_END =
+	"// expo-assistant-functions AppFunctionConfiguration end";
+
+const MARKED_APPFUNCTION_CONFIG = new RegExp(
+	`${APPFUNCTION_CONFIG_REGION_START}[\\s\\S]*?${APPFUNCTION_CONFIG_REGION_END}\\n?`,
+	"m"
+);
+
+function toPascalCase(str: string): string {
+	return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/** Jetpack needs explicit factories for generated *Impl classes (see AppFunctionConfiguration.Builder). */
+function buildMarkedAppFunctionConfigurationBlock(
+	functions: FunctionDefinition[]
+): string {
+	if (!functions.length) {
+		return `    ${APPFUNCTION_CONFIG_REGION_START}
+    override val appFunctionConfiguration: AppFunctionConfiguration
+        get() = AppFunctionConfiguration.Builder().build()
+    ${APPFUNCTION_CONFIG_REGION_END}
+`;
+	}
+	const factories = functions
+		.map((f) => {
+			const cls = `${toPascalCase(f.name)}Impl`;
+			return `            .addEnclosingClassFactory(${cls}::class.java) { ${cls}() }`;
+		})
+		.join("\n");
+	return `    ${APPFUNCTION_CONFIG_REGION_START}
+    override val appFunctionConfiguration: AppFunctionConfiguration
+        get() = AppFunctionConfiguration.Builder()
+${factories}
+            .build()
+    ${APPFUNCTION_CONFIG_REGION_END}
+`;
+}
+
+function ensureGeneratedImplImports(
+	src: string,
+	functions: FunctionDefinition[]
+): string {
+	const anchor = "import androidx.appfunctions.service.AppFunctionConfiguration";
+	if (!src.includes(anchor)) {
 		return src;
 	}
-	let result = src;
+	const lines = functions
+		.map((f) => {
+			const line = `import expo.modules.appfunctions.generated.${toPascalCase(f.name)}Impl`;
+			return src.includes(line) ? null : line;
+		})
+		.filter(Boolean) as string[];
+	if (!lines.length) {
+		return src;
+	}
+	return src.replace(anchor, `${anchor}\n${lines.join("\n")}`);
+}
+
+function patchMainApplication(
+	src: string,
+	functions: FunctionDefinition[]
+): string {
+	let result = ensureGeneratedImplImports(src, functions);
+
+	if (MARKED_APPFUNCTION_CONFIG.test(result)) {
+		result = result.replace(
+			MARKED_APPFUNCTION_CONFIG,
+			buildMarkedAppFunctionConfigurationBlock(functions)
+		);
+		return ensureGeneratedImplImports(result, functions);
+	}
 
 	if (!result.includes(IMPORT_APPFUNCTION.trim())) {
 		const lastImport = result.lastIndexOf("import ");
 		const endOfImport = result.indexOf("\n", lastImport) + 1;
 		result = `${result.slice(0, endOfImport)}${IMPORT_APPFUNCTION}${result.slice(endOfImport)}`;
 	}
+	result = ensureGeneratedImplImports(result, functions);
 
 	if (!result.includes("AppFunctionConfiguration.Provider")) {
 		if (MAIN_APP_CLASS_FULL.test(result)) {
@@ -258,15 +314,28 @@ function patchMainApplication(src: string): string {
 		}
 	}
 
+	const emptyGetter =
+		/override val appFunctionConfiguration: AppFunctionConfiguration\n\s+get\(\) = AppFunctionConfiguration\.Builder\(\)\.build\(\)/;
+	if (emptyGetter.test(result)) {
+		result = result.replace(
+			emptyGetter,
+			buildMarkedAppFunctionConfigurationBlock(functions).trimEnd()
+		);
+		return ensureGeneratedImplImports(result, functions);
+	}
+
 	if (!result.includes("appFunctionConfiguration")) {
 		const lastBrace = result.lastIndexOf("}");
-		result = `${result.slice(0, lastBrace)}\n${PROVIDER_CONFIG}\n${result.slice(lastBrace)}`;
+		result = `${result.slice(0, lastBrace)}\n${buildMarkedAppFunctionConfigurationBlock(functions)}\n${result.slice(lastBrace)}`;
 	}
 
 	return result;
 }
 
-function withMainApplicationMod(config: Parameters<ConfigPlugin>[0]) {
+function withMainApplicationMod(
+	config: Parameters<ConfigPlugin>[0],
+	props: AppFunctionsPluginProps
+) {
 	return withDangerousMod(config, [
 		"android",
 		(config) => {
@@ -308,7 +377,8 @@ function withMainApplicationMod(config: Parameters<ConfigPlugin>[0]) {
 
 			try {
 				const contents = readFileSync(mainAppPath, "utf-8");
-				const patched = patchMainApplication(contents);
+				const functions = props.functions ?? [];
+				const patched = patchMainApplication(contents, functions);
 				if (patched !== contents) {
 					writeFileSync(mainAppPath, patched);
 				}
@@ -327,7 +397,7 @@ const withAppFunctionsAndroid: ConfigPlugin<AppFunctionsPluginProps> = (
 ) => {
 	let modifiedConfig = config;
 	modifiedConfig = withGeneratedKotlinSources(modifiedConfig, props);
-	modifiedConfig = withMainApplicationMod(modifiedConfig);
+	modifiedConfig = withMainApplicationMod(modifiedConfig, props);
 	modifiedConfig = withProjectBuildGradleMod(modifiedConfig, props);
 	modifiedConfig = withAppBuildGradleMod(modifiedConfig, props);
 	modifiedConfig = withAndroidManifestMod(modifiedConfig);

@@ -39,6 +39,57 @@ export type FunctionHandler = (event: FunctionCallEvent) => Promise<unknown>;
 export interface AppFunctionMap {}
 
 const isIOS = Platform.OS === "ios";
+const isAndroid = Platform.OS === "android";
+
+type ActiveHeadless = {
+	inflight: number;
+	safetyId: ReturnType<typeof setTimeout>;
+	seal: () => void;
+};
+
+let activeHeadless: ActiveHeadless | null = null;
+
+function armHeadlessSession(
+	resolve: () => void,
+	cleanup: (() => void) | undefined
+): void {
+	const seal = (): void => {
+		if (!activeHeadless) {
+			return;
+		}
+		clearTimeout(activeHeadless.safetyId);
+		activeHeadless = null;
+		try {
+			cleanup?.();
+		} catch {
+			// best-effort
+		}
+		resolve();
+	};
+	activeHeadless = {
+		inflight: 0,
+		// Upper bound: AppFunctionHeadlessService uses 60s HeadlessJsTaskConfig
+		safetyId: setTimeout(seal, 60_000),
+		seal,
+	};
+}
+
+function headlessBridgeCallStart(): void {
+	if (activeHeadless) {
+		activeHeadless.inflight++;
+	}
+}
+
+function headlessBridgeCallEnd(): void {
+	const h = activeHeadless;
+	if (!h) {
+		return;
+	}
+	h.inflight--;
+	if (h.inflight <= 0) {
+		h.seal();
+	}
+}
 
 function sendResult(callId: string, result: unknown): void {
 	if (isIOS) {
@@ -77,12 +128,19 @@ nativeModule.addListener(
 		const callId = event.id ?? event.callId ?? "";
 		const params = event.parameters ?? event.params ?? {};
 
-    const handler = handlers.get(functionName) ?? handlers.get("*");
+		if (isAndroid) {
+			headlessBridgeCallStart();
+		}
+
+		const handler = handlers.get(functionName) ?? handlers.get("*");
 		if (!handler) {
 			sendError(
 				callId,
 				`No handler registered for "${functionName}". Available: ${[...handlers.keys()].join(", ")}`
 			);
+			if (isAndroid) {
+				headlessBridgeCallEnd();
+			}
 			return;
 		}
 
@@ -95,6 +153,11 @@ nativeModule.addListener(
 					callId,
 					error instanceof Error ? error.message : "Unknown error"
 				);
+			})
+			.finally(() => {
+				if (isAndroid) {
+					headlessBridgeCallEnd();
+				}
 			});
 	}
 );
@@ -110,26 +173,19 @@ export function off(functionName: string): void {
 	handlers.delete(functionName);
 }
 
-const isAndroid = Platform.OS === "android";
 let headlessRegisterFn: (() => (() => void) | void) | null = null;
 
 // Auto-register headless task at module init (Android only).
 // The headless task calls the user-provided registerFn when it starts.
 if (isAndroid) {
+	// taskProvider must return (taskData) => Promise — see AppRegistry.startHeadlessTask
 	AppRegistry.registerHeadlessTask(
 		"AppFunctionHeadlessTask",
-		() =>
+		() => (_taskData: unknown) =>
 			new Promise<void>((resolve) => {
 				if (headlessRegisterFn) {
-					const hCleanup = headlessRegisterFn();
-					setTimeout(() => {
-						try {
-							hCleanup?.();
-						} catch {
-							// cleanup is best-effort in headless mode
-						}
-						resolve();
-					}, 55_000);
+					const cleanup = headlessRegisterFn() ?? undefined;
+					armHeadlessSession(resolve, cleanup);
 				} else {
 					setTimeout(resolve, 5_000);
 				}

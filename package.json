@@ -20,6 +20,7 @@
     "postbuild": "",
     "prepublishOnly": "npm run build",
     "check-types": "tsc -p tsconfig.json --noEmit",
+    "verify:android-app-functions": "adb shell cmd app_function list-app-functions",
     "release:patch": "npm version patch && git push --follow-tags",
     "release:minor": "npm version minor && git push --follow-tags",
     "release:major": "npm version major && git push --follow-tags"
