@@ -1,5 +1,5 @@
 // Use dynamic require to avoid TypeScript resolution issues with Bun's workspace layout
-const { Platform } = require("react-native");
+const { AppRegistry, Platform } = require("react-native");
 const { requireNativeModule } = require("expo-modules-core");
 
 const nativeModule =
@@ -77,7 +77,7 @@ nativeModule.addListener(
 		const callId = event.id ?? event.callId ?? "";
 		const params = event.parameters ?? event.params ?? {};
 
-		const handler = handlers.get(functionName);
+    const handler = handlers.get(functionName) ?? handlers.get("*");
 		if (!handler) {
 			sendError(
 				callId,
@@ -108,6 +108,50 @@ export function on(functionName: string, handler: FunctionHandler): () => void {
 
 export function off(functionName: string): void {
 	handlers.delete(functionName);
+}
+
+const isAndroid = Platform.OS === "android";
+let headlessRegisterFn: (() => (() => void) | void) | null = null;
+
+// Auto-register headless task at module init (Android only).
+// The headless task calls the user-provided registerFn when it starts.
+if (isAndroid) {
+	AppRegistry.registerHeadlessTask(
+		"AppFunctionHeadlessTask",
+		() =>
+			new Promise<void>((resolve) => {
+				if (headlessRegisterFn) {
+					const hCleanup = headlessRegisterFn();
+					setTimeout(() => {
+						try {
+							hCleanup?.();
+						} catch {
+							// cleanup is best-effort in headless mode
+						}
+						resolve();
+					}, 55_000);
+				} else {
+					setTimeout(resolve, 5_000);
+				}
+			})
+	);
+}
+
+/**
+ * Registers App Function handlers that work both when the app is in the foreground
+ * and when it's in cold-start (headless mode). Call this at module load time (not
+ * inside a React component) so handlers are available even before the UI renders.
+ *
+ * @param registerFn A function that calls `on()` to register each function handler,
+ *                   and returns an optional cleanup function.
+ */
+export function registerHeadlessHandlers(
+	registerFn: () => (() => void) | void
+): void {
+	headlessRegisterFn = registerFn;
+	const cleanup = registerFn();
+	// cleanup in foreground mode is handled by the caller's lifecycle
+	void cleanup;
 }
 
 export function createTypedHandler<

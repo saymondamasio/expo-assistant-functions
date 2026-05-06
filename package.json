@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p plugin/tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json -w & tsc -p plugin/tsconfig.json -w",
     "postbuild": "",
     "prepublishOnly": "npm run build",
     "check-types": "tsc -p tsconfig.json --noEmit",

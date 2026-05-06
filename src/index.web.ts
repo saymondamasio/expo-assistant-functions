@@ -6,6 +6,7 @@ function noop() {
 
 export const on = () => noop;
 export const off = noop;
+export const registerHeadlessHandlers = noop;
 export const setFunctionHandler = noop;
 export const clearFunctionHandler = noop;
 export const handleFunctionResult = noop;

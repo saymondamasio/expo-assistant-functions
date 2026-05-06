@@ -1,5 +1,5 @@
 {
-  "name": "expo-ai-intents",
+  "name": "expo-assistant-functions",
   "platforms": ["android", "apple"],
   "android": {
     "modules": ["expo.modules.appfunctions.AppFunctionsModule"]
