@@ -203,6 +203,38 @@ function withAndroidManifestMod(config: Parameters<ConfigPlugin>[0]) {
 	});
 }
 
+/** Override Jetpack default (false) so PlatformAppFunctionService can bind. */
+function withPlatformAppFunctionServiceEnabled(
+	config: Parameters<ConfigPlugin>[0]
+) {
+	return withDangerousMod(config, [
+		"android",
+		(c) => {
+			const { mkdirSync, writeFileSync } = require("node:fs");
+			const { join } = require("node:path");
+			const dir = join(
+				c.modRequest.projectRoot,
+				"android",
+				"app",
+				"src",
+				"main",
+				"res",
+				"values"
+			);
+			mkdirSync(dir, { recursive: true });
+			writeFileSync(
+				join(dir, "expo_assistant_functions_bools.xml"),
+				`<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<bool name="enablePlatformAppFunctionService">true</bool>
+</resources>
+`
+			);
+			return c;
+		},
+	]);
+}
+
 const MAIN_APP_CLASS_FULL =
 	/(class\s+MainApplication\s*:\s*Application\s*\(\s*\)\s*,\s*ReactApplication\s*)\{/;
 const MAIN_APP_CLASS_SIMPLE =
@@ -401,6 +433,7 @@ const withAppFunctionsAndroid: ConfigPlugin<AppFunctionsPluginProps> = (
 	modifiedConfig = withProjectBuildGradleMod(modifiedConfig, props);
 	modifiedConfig = withAppBuildGradleMod(modifiedConfig, props);
 	modifiedConfig = withAndroidManifestMod(modifiedConfig);
+	modifiedConfig = withPlatformAppFunctionServiceEnabled(modifiedConfig);
 	return modifiedConfig;
 };
 
