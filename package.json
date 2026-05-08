@@ -1,6 +1,6 @@
 {
   "name": "expo-assistant-functions",
-  "version": "0.0.3",
+  "version": "0.0.7",
   "description": "Expo module for Assistant Functions — exposes in-app functions to Android App Functions (Gemini, Google Assistant) and iOS App Intents (Siri, Shortcuts).",
   "main": "build/index.js",
   "types": "build/index.d.ts",
