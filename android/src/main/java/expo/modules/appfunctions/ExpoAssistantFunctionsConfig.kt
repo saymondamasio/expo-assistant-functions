@@ -23,12 +23,12 @@ object ExpoAssistantFunctionsConfig {
     fun invokeTimeoutMs(context: Context): Long =
         readLongMeta(context, META_INVOKE_TIMEOUT_MS, DEFAULT_INVOKE_TIMEOUT_MS)
 
-    fun headlessTaskTimeoutMs(context: Context): Int =
+    fun headlessTaskTimeoutMs(context: Context): Long =
         readLongMeta(
             context,
             META_HEADLESS_TASK_TIMEOUT_MS,
             DEFAULT_HEADLESS_TASK_TIMEOUT_MS.toLong(),
-        ).toInt().coerceIn(10_000, 300_000)
+        ).coerceIn(10_000L, 300_000L)
 
     private fun readLongMeta(context: Context, key: String, default: Long): Long {
         return try {
