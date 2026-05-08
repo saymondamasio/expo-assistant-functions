@@ -39,7 +39,7 @@ class AppFunctionsModule : Module() {
         instance = this@AppFunctionsModule
         readyLatch.countDown()
 
-        AsyncFunction("handleFunctionResult") { callId: String, resultJson: String ->
+        Function("handleFunctionResult") { callId: String, resultJson: String ->
             pendingCalls[callId]?.complete(resultJson)
             pendingCalls.remove(callId)
             Unit
