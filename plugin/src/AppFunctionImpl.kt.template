@@ -1,10 +1,10 @@
     /** ${DESCRIPTION} */
 class ${INTERFACE_NAME}Impl : ${INTERFACE_NAME} {
     @AppFunction(isDescribedByKDoc = true)
-    override fun ${FUNCTION_NAME}(
+    override suspend fun ${FUNCTION_NAME}(
         appFunctionContext: AppFunctionContext${PARAMETERS}
     ): String {
-        return AppFunctionBridge.invoke(
+        return AppFunctionsModule.invokeFromAppFunction(
             appFunctionContext.context,
             "${FUNCTION_NAME}"${PARAMS_MAP}
         )

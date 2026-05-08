@@ -191,27 +191,19 @@ function patchAndroidManifest(
 	// EXECUTE_APP_FUNCTIONS is for caller apps (agents) that invoke other packages'
 	// functions — not required for the publishing app. See developer.android.com/ai/appfunctions
 
-	// Register ContentProvider bridge
 	const mainAppAny = mainApp as Record<string, unknown>;
+
+	// Drop legacy ContentProvider bridge (replaced by direct suspend call to AppFunctionsModule)
 	const providers = (mainAppAny.provider ?? []) as Array<{
 		$?: Record<string, string>;
 	}>;
-	const hasBridge = providers.some(
+	const filteredProviders = providers.filter(
 		(p: { $?: Record<string, string> }) =>
-			p.$?.["android:name"] ===
-			"expo.modules.appfunctions.AppFunctionBridgeProvider"
+			p.$?.["android:name"] !==
+			"expo.modules.appfunctions.AppFunctionBridgeProvider",
 	);
-
-	if (!hasBridge) {
-		const providerEntry = {
-			$: {
-				"android:name": "expo.modules.appfunctions.AppFunctionBridgeProvider",
-				// biome-ignore lint/suspicious/noTemplateCurlyInString: Android manifest placeholder
-				"android:authorities": "${applicationId}.appfunctions.bridge",
-				"android:exported": "false",
-			},
-		};
-		mainAppAny.provider = [...providers, providerEntry];
+	if (filteredProviders.length !== providers.length) {
+		mainAppAny.provider = filteredProviders;
 	}
 
 	// Register Headless JS service

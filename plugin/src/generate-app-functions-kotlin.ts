@@ -198,7 +198,6 @@ import androidx.appfunctions.AppFunctionContext
 import androidx.appfunctions.AppFunctionSchemaDefinition
 import androidx.appfunctions.AppFunctionStringValueConstraint
 import androidx.appfunctions.service.AppFunction
-import expo.modules.appfunctions.AppFunctionBridge
 import expo.modules.appfunctions.AppFunctionsModule
 `;
 

@@ -46,7 +46,7 @@ Adiciona ao `app.json`:
 
 ### Opções Android (tempos e prewarm)
 
-O plugin injeta `<meta-data>` na `<application>` para o bridge nativo ler timeouts em runtime. Isto ajuda a evitar ANR em cold start e a alinhar o headless JS com a espera do `ContentProvider`.
+O plugin injeta `<meta-data>` na `<application>` para o módulo nativo ler timeouts em runtime. Os métodos `@AppFunction` gerados são **`suspend fun`**, executados pelo Jetpack `androidx.appfunctions` numa corrotina — sem bloquear a main thread (a UI não congela enquanto o JS responde).
 
 | Opção `app.json` | Meta-data | Predefinição | Descrição |
 |------------------|-----------|--------------|-----------|
@@ -77,7 +77,32 @@ Exemplo:
 }
 ```
 
-**Nota:** o comando `adb shell cmd app_function execute-app-function` pode continuar a ter um limite de ~30 s ao nível do Binder do sistema; valores maiores ajudam sobretudo quando o assistente invoca a app diretamente. O **prewarm** reduz o trabalho feito dentro da primeira invocação em cold start (menos risco de ANR no serviço).
+**Nota:** o comando `adb shell cmd app_function execute-app-function` tem um limite ~30 s ao nível do Binder do sistema; valores maiores em `invokeTimeoutMs` ajudam quando o assistente invoca a app diretamente (sem o `cmd`). O **prewarm** acelera a primeira invocação em cold start.
+
+### Arquitetura (suspend, sem bloqueio de thread)
+
+```
+cmd app_function ──► AppFunctionService (Jetpack)
+                       │  (corrotina; @AppFunction roda na main por defeito)
+                       ▼
+               GeneratedImpl.foo  (suspend fun)
+                       │
+                       ▼
+        AppFunctionsModule.invokeFromAppFunction(ctx, name, params)  (suspend)
+                       │
+                       ├── if (!isReady) AppFunctionHeadlessService.start(...)
+                       │   awaitReady(timeout)            ── suspend, sem runBlocking
+                       ▼
+        sendEvent("onFunctionCall", …) ──► JS handler
+                                              │
+                                              ▼
+                            nativeModule.handleFunctionResult(callId, json)
+                                              │  (Function/JSI no New Architecture)
+                                              ▼
+                           pendingCalls[callId].complete(json)  ── retoma a corrotina
+```
+
+O bloqueio anterior (`runBlocking { deferred.await() }` num `ContentProvider`) foi removido: a função do Jetpack permanece suspensa na corrotina dele, libertando a main thread. Por isso o app não congela enquanto a função roda.
 
 ## Utilização
 
@@ -110,9 +135,9 @@ on("createProject", async ({ projectName }) => {
 Durante o `expo prebuild`, o config plugin:
 
 1. Lê as definições de funções a partir do `app.json`
-2. Gera ficheiros Kotlin para Android (KSP + `androidx.appfunctions`)
+2. Gera ficheiros Kotlin para Android (KSP + `androidx.appfunctions`) com `suspend fun` que invocam o módulo Expo diretamente
 3. Gera ficheiros Swift para iOS (`AppIntents`)
-4. Regista um `ContentProvider` de ponte para suporte a cold start
+4. Regista o `AppFunctionHeadlessService` (cold start) e meta-data de timeouts
 5. Altera o `build.gradle` (Android) para incluir dependências KSP + App Functions
 
 ## Requisitos
