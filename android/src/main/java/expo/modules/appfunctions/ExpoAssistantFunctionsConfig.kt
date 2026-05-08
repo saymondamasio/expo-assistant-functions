@@ -12,7 +12,6 @@ object ExpoAssistantFunctionsConfig {
     const val META_WAIT_FOR_MODULE_MS = META_PREFIX + "WAIT_FOR_MODULE_MS"
     const val META_INVOKE_TIMEOUT_MS = META_PREFIX + "INVOKE_TIMEOUT_MS"
     const val META_HEADLESS_TASK_TIMEOUT_MS = META_PREFIX + "HEADLESS_TASK_TIMEOUT_MS"
-    const val META_DEFER_TO_WORK_MANAGER = META_PREFIX + "DEFER_TO_WORK_MANAGER"
 
     const val DEFAULT_WAIT_FOR_MODULE_MS = 60_000L
     const val DEFAULT_INVOKE_TIMEOUT_MS = 45_000L
@@ -30,30 +29,6 @@ object ExpoAssistantFunctionsConfig {
             META_HEADLESS_TASK_TIMEOUT_MS,
             DEFAULT_HEADLESS_TASK_TIMEOUT_MS.toLong(),
         ).coerceIn(10_000L, 300_000L)
-
-    fun deferToWorkManager(context: Context): Boolean =
-        readBoolMeta(context, META_DEFER_TO_WORK_MANAGER, false)
-
-    private fun readBoolMeta(context: Context, key: String, default: Boolean): Boolean {
-        return try {
-            val ai = context.packageManager.getApplicationInfo(
-                context.packageName,
-                PackageManager.GET_META_DATA,
-            )
-            val bundle = ai.metaData ?: return default
-            if (!bundle.containsKey(key)) {
-                return default
-            }
-            when (val v = bundle[key]) {
-                is Boolean -> v
-                is String -> v.equals("true", ignoreCase = true) || v == "1"
-                is Int -> v != 0
-                else -> default
-            }
-        } catch (_: Exception) {
-            default
-        }
-    }
 
     private fun readLongMeta(context: Context, key: String, default: Long): Long {
         return try {

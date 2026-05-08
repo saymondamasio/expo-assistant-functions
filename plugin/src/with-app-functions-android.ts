@@ -28,7 +28,6 @@ const ASSISTANT_FUNCTIONS_META_KEYS = [
 	"expo.modules.appfunctions.WAIT_FOR_MODULE_MS",
 	"expo.modules.appfunctions.INVOKE_TIMEOUT_MS",
 	"expo.modules.appfunctions.HEADLESS_TASK_TIMEOUT_MS",
-	"expo.modules.appfunctions.DEFER_TO_WORK_MANAGER",
 ] as const;
 
 function applyAssistantFunctionsMetaData(
@@ -38,7 +37,6 @@ function applyAssistantFunctionsMetaData(
 	const waitMs = props.coldStartTimeoutMs ?? 60_000;
 	const invokeMs = props.invokeTimeoutMs ?? 45_000;
 	const headlessMs = props.headlessTaskTimeoutMs ?? 60_000;
-	const deferWm = props.deferAppFunctionsToWorkManager === true;
 
 	const mainAppAny = mainApp as Record<string, unknown>;
 	const existingMeta = (mainAppAny["meta-data"] ?? []) as Array<{
@@ -65,12 +63,6 @@ function applyAssistantFunctionsMetaData(
 			$: {
 				"android:name": "expo.modules.appfunctions.HEADLESS_TASK_TIMEOUT_MS",
 				"android:value": String(headlessMs),
-			},
-		},
-		{
-			$: {
-				"android:name": "expo.modules.appfunctions.DEFER_TO_WORK_MANAGER",
-				"android:value": deferWm ? "true" : "false",
 			},
 		},
 	];

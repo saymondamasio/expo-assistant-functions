@@ -28,13 +28,6 @@ export interface AppFunctionsPluginProps {
 	 * @default 60000
 	 */
 	coldStartTimeoutMs?: number;
-	/**
-	 * When `true`, generated App Functions return immediately with `{ accepted, jobId, ... }`
-	 * and the RN/JS bridge runs inside a WorkManager worker (avoids blocking Binder/service).
-	 * Meta-data: `expo.modules.appfunctions.DEFER_TO_WORK_MANAGER`.
-	 * @default false
-	 */
-	deferAppFunctionsToWorkManager?: boolean;
 	functions: FunctionDefinition[];
 	/**
 	 * Headless JS task timeout (ms) for `AppFunctionHeadlessService` — must cover cold RN bootstrap.

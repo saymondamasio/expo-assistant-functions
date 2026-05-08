@@ -13,7 +13,7 @@ android {
     compileSdk 36
     targetSdk 36
     versionCode 1
-    versionName "0.0.9"
+    versionName "0.0.10"
   }
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
@@ -28,6 +28,5 @@ dependencies {
   compileOnly 'com.facebook.react:react-android'
   implementation 'androidx.appfunctions:appfunctions:1.0.0-alpha08'
   implementation 'androidx.appfunctions:appfunctions-service:1.0.0-alpha08'
-  implementation 'androidx.work:work-runtime-ktx:2.9.1'
   implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
 }
