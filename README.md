@@ -1,38 +1,38 @@
-# expo-ai-intents
+# expo-assistant-functions
 
-Módulo Expo para intenções da app orientadas por IA. Define funções na app em `app.json` e expõe-as a:
+Expo module for AI-driven app intents. Define app functions in `app.json` and expose them to:
 
 - **Android**: App Functions (Gemini, Google Assistant)
-- **iOS**: App Intents (Siri, Atalhos)
+- **iOS**: App Intents (Siri, Shortcuts)
 
-## Instalação
+## Install
 
 ```bash
-npm install expo-ai-intents
+npm install expo-assistant-functions
 ```
 
-## Configuração
+## Configuration
 
-Adiciona ao `app.json`:
+Add to your `app.json`:
 
 ```json
 {
   "expo": {
     "plugins": [
       [
-        "expo-ai-intents",
+        "expo-assistant-functions",
         {
-          "appDescription": "Descrição da app para assistentes de IA",
+          "appDescription": "App description for AI assistants",
           "category": "myapp",
           "functions": [
             {
               "name": "createProject",
-              "description": "Cria um novo projeto",
+              "description": "Creates a new project",
               "parameters": [
                 {
                   "name": "projectName",
                   "type": "string",
-                  "description": "Nome do projeto"
+                  "description": "Project name"
                 }
               ]
             }
@@ -44,18 +44,18 @@ Adiciona ao `app.json`:
 }
 ```
 
-### Opções Android (tempos e prewarm)
+### Android Options (timeouts and prewarm)
 
-O plugin injeta `<meta-data>` na `<application>` para o módulo nativo ler timeouts em runtime. Os métodos `@AppFunction` gerados são **`suspend fun`**, executados pelo Jetpack `androidx.appfunctions` numa corrotina — sem bloquear a main thread (a UI não congela enquanto o JS responde).
+The plugin injects `<meta-data>` into `<application>` so the native module can read timeouts at runtime. The generated `@AppFunction` methods are **`suspend fun`**, executed by the Jetpack `androidx.appfunctions` on a coroutine — without blocking the main thread (the UI does not freeze while JS responds).
 
-| Opção `app.json` | Meta-data | Predefinição | Descrição |
-|------------------|-----------|--------------|-----------|
-| `coldStartTimeoutMs` | `WAIT_FOR_MODULE_MS` | `60000` | Tempo máximo à espera do módulo nativo `AppFunctions` (RN a inicializar). |
-| `invokeTimeoutMs` | `INVOKE_TIMEOUT_MS` | `45000` | Tempo máximo até o JS chamar `handleFunctionResult` após `onFunctionCall`. |
-| `headlessTaskTimeoutMs` | `HEADLESS_TASK_TIMEOUT_MS` | `60000` | Timeout do `HeadlessJsTaskConfig` no `AppFunctionHeadlessService`. |
-| `prewarmHeadlessOnLaunch` | — | `true` | Se `true`, o plugin insere `AppFunctionHeadlessService.start(this)` em `MainApplication.onCreate` para aquecer o runtime antes do primeiro pedido. |
+| `app.json` option | Meta-data | Default | Description |
+|---|---|---|---|
+| `coldStartTimeoutMs` | `WAIT_FOR_MODULE_MS` | `60000` | Max time waiting for the native `AppFunctions` module (RN boot). |
+| `invokeTimeoutMs` | `INVOKE_TIMEOUT_MS` | `45000` | Max time until JS calls `handleFunctionResult` after `onFunctionCall`. |
+| `headlessTaskTimeoutMs` | `HEADLESS_TASK_TIMEOUT_MS` | `60000` | Timeout of `HeadlessJsTaskConfig` in `AppFunctionHeadlessService`. |
+| `prewarmHeadlessOnLaunch` | — | `true` | If `true`, the plugin inserts `AppFunctionHeadlessService.start(this)` in `MainApplication.onCreate` to warm the runtime before the first request. |
 
-Exemplo:
+Example:
 
 ```json
 {
@@ -77,13 +77,32 @@ Exemplo:
 }
 ```
 
-**Nota:** o comando `adb shell cmd app_function execute-app-function` tem um limite ~30 s ao nível do Binder do sistema; valores maiores em `invokeTimeoutMs` ajudam quando o assistente invoca a app diretamente (sem o `cmd`). O **prewarm** acelera a primeira invocação em cold start.
+**Note:** the `adb shell cmd app_function execute-app-function` command has a ~30 s limit at the system Binder level; higher `invokeTimeoutMs` values help when the assistant invokes the app directly (without `cmd`). **Prewarm** speeds up the first cold-start invocation.
 
-### Arquitetura (suspend, sem bloqueio de thread)
+### Invoke a function via terminal (ADB)
+
+After `expo prebuild` and `expo run:android`, you can invoke a function directly via ADB to test:
+
+```bash
+adb shell "cmd app_function execute-app-function \
+    --package com.your.package \
+    --function expo.modules.appfunctions.generated.CreateProjectImpl#createProject \
+    --parameters '{\"projectName\":[\"Project name\"]}'"
+```
+
+| Parameter | Description |
+|---|---|
+| `--package` | App `applicationId` (usually `expo.android.package` in `app.json`) |
+| `--function` | `expo.modules.appfunctions.generated.{Name}PascalImpl#{name}camelCase` |
+| `--parameters` | JSON with key = parameter name, value = array with the value |
+
+> **Tip:** parameter values always go inside an array in JSON, even for a single value (e.g. `[\"text\"]`).
+
+### Architecture (suspend, non-blocking)
 
 ```
 cmd app_function ──► AppFunctionService (Jetpack)
-                       │  (corrotina; @AppFunction roda na main por defeito)
+                       │  (coroutine; @AppFunction runs on main by default)
                        ▼
                GeneratedImpl.foo  (suspend fun)
                        │
@@ -91,113 +110,113 @@ cmd app_function ──► AppFunctionService (Jetpack)
         AppFunctionsModule.invokeFromAppFunction(ctx, name, params)  (suspend)
                        │
                        ├── if (!isReady) AppFunctionHeadlessService.start(...)
-                       │   awaitReady(timeout)            ── suspend, sem runBlocking
+                       │   awaitReady(timeout)            ── suspend, no runBlocking
                        ▼
         sendEvent("onFunctionCall", …) ──► JS handler
                                               │
                                               ▼
                             nativeModule.handleFunctionResult(callId, json)
-                                              │  (Function/JSI no New Architecture)
+                                              │  (Function/JSI on New Architecture)
                                               ▼
-                           pendingCalls[callId].complete(json)  ── retoma a corrotina
+                           pendingCalls[callId].complete(json)  ── resumes coroutine
 ```
 
-O bloqueio anterior (`runBlocking { deferred.await() }` num `ContentProvider`) foi removido: a função do Jetpack permanece suspensa na corrotina dele, libertando a main thread. Por isso o app não congela enquanto a função roda.
+The previous blocking approach (`runBlocking { deferred.await() }` inside a `ContentProvider`) has been removed: the Jetpack function stays suspended on its coroutine, freeing the main thread. This is why the app does not freeze while the function runs.
 
-## Utilização
+## Usage
 
 ```ts
-import { createTypedHandler, addFunctionListener } from "expo-ai-intents";
-import type { AppFunctionMap } from "expo-ai-intents";
+import { createTypedHandler, addFunctionListener } from "expo-assistant-functions";
+import type { AppFunctionMap } from "expo-assistant-functions";
 
 addFunctionListener(
   createTypedHandler<AppFunctionMap>({
     createProject: async ({ projectName }) => {
-      // `projectName` está tipado como `string`
+      // `projectName` is typed as `string`
       return { success: true };
     },
   })
 );
 ```
 
-Ou por função:
+Or per function:
 
 ```ts
-import { on } from "expo-ai-intents";
+import { on } from "expo-assistant-functions";
 
 on("createProject", async ({ projectName }) => {
   return { success: true };
 });
 ```
 
-## Como funciona
+## How it works
 
-Durante o `expo prebuild`, o config plugin:
+During `expo prebuild`, the config plugin:
 
-1. Lê as definições de funções a partir do `app.json`
-2. Gera ficheiros Kotlin para Android (KSP + `androidx.appfunctions`) com `suspend fun` que invocam o módulo Expo diretamente
-3. Gera ficheiros Swift para iOS (`AppIntents`)
-4. Regista o `AppFunctionHeadlessService` (cold start) e meta-data de timeouts
-5. Altera o `build.gradle` (Android) para incluir dependências KSP + App Functions
+1. Reads function definitions from `app.json`
+2. Generates Kotlin files for Android (KSP + `androidx.appfunctions`) with `suspend fun` that call the Expo module directly
+3. Generates Swift files for iOS (`AppIntents`)
+4. Registers `AppFunctionHeadlessService` (cold start) and timeout meta-data
+5. Modifies `build.gradle` (Android) to include KSP + App Functions dependencies
 
-## Requisitos
+## Requirements
 
 - Expo SDK 55+
-- Android 16 (API 36) para App Functions
-- iOS 16+ para App Intents
+- Android 16 (API 36) for App Functions
+- iOS 16+ for App Intents
 
-## Testar no Android (terminal / ADB)
+## Testing on Android (terminal / ADB)
 
-O Android expõe comandos de shell para listar e executar App Functions no dispositivo. Isto confirma que o `prebuild` gerou o metadata e que o sistema indexou as funções da tua app. A listagem é o passo de verificação recomendado na [documentação oficial](https://developer.android.com/ai/appfunctions).
+Android exposes shell commands to list and execute App Functions on the device. This confirms that `prebuild` generated the metadata and the system indexed your app's functions. Listing is the recommended verification step in the [official documentation](https://developer.android.com/ai/appfunctions).
 
-1. Liga um **dispositivo ou emulador** com API 36+ e confirma que o `adb` o vê: `adb devices`.
-2. Instala o build da app no dispositivo (por exemplo `npx expo run:android` após `expo prebuild`).
+1. Connect a **device or emulator** with API 36+ and confirm `adb` sees it: `adb devices`.
+2. Install the app build on the device (e.g. `npx expo run:android` after `expo prebuild`).
 
-### Listar funções registadas
+### List registered functions
 
 ```bash
 adb shell cmd app_function list-app-functions
 ```
 
-Na saída, procura o **package** da app (`applicationId`, normalmente `expo.android.package` no `app.json`) e os identificadores das funções. Se a lista for grande, filtra no computador:
+In the output, look for the app **package** (`applicationId`, usually `expo.android.package` in `app.json`) and function identifiers. If the list is large, filter on your machine:
 
 ```bash
-adb shell cmd app_function list-app-functions | grep com.teu.pacote
+adb shell cmd app_function list-app-functions | grep com.your.package
 ```
 
-### Invocar (executar) uma função
+### Invoke (execute) a function
 
-Usa `execute-app-function` com o package da app, o identificador da função (como aparece na listagem ou no padrão abaixo) e um JSON de parâmetros. O formato de `--parameters` segue o que o sistema espera para cada tipo (para `string`, costuma ser um mapa de nome → lista de valores).
+Use `execute-app-function` with the app package, function identifier (as shown in the listing or the pattern below), and a JSON of parameters. The `--parameters` format follows what the system expects for each type (for `string`, it is usually a map of name → list of values).
 
-**Identificador da função (`--function`):** para uma função declarada com `"name": "createProject"` no plugin, a implementação gerada fica em `expo.modules.appfunctions.generated.CreateProjectImpl` e o método é `createProject`, ou seja:
+**Function identifier (`--function`):** for a function declared with `"name": "createProject"` in the plugin, the generated implementation lives at `expo.modules.appfunctions.generated.CreateProjectImpl` and the method is `createProject`, i.e.:
 
 `expo.modules.appfunctions.generated.CreateProjectImpl#createProject`
 
-Substitui `CreateProject` / `createProject` pelo **PascalCase** da classe `*Impl` e pelo **nome camelCase** da função no `app.json`.
+Replace `CreateProject` / `createProject` with the **PascalCase** of the `*Impl` class and the **camelCase** function name from `app.json`.
 
-Exemplo completo (ajusta package, função e parâmetros à tua app):
+Full example (adjust package, function, and parameters to your app):
 
 ```bash
 adb shell "cmd app_function execute-app-function \
     --package com.saymondamasio95.nossocusto \
     --function expo.modules.appfunctions.generated.CreateProjectImpl#createProject \
-    --parameters '{\"projectName\":[\"Nome do projeto\"]}'"
+    --parameters '{\"projectName\":[\"Project name\"]}'"
 ```
 
-**Notas:**
+**Notes:**
 
-- O `adb shell` com aspas externas evita que a shell do host parta o JSON com espaços ou chaves.
-- Escapa as aspas duplas dentro do JSON (`\"`) como no exemplo.
-- A app deve estar **instalada**; em alguns cenários convém tê-la aberta ou em segundo plano para o handler em JavaScript estar registado.
+- The `adb shell` with outer quotes prevents the host shell from splitting the JSON with spaces or braces.
+- Escape double quotes inside JSON (`\"`) as in the example.
+- The app must be **installed**; in some scenarios it is best to have it open or in the background so the JavaScript handler is registered.
 
-### Script neste repositório
+### Script in this repository
 
-Para desenvolvimento do módulo, existe um script que só lista funções:
+For module development, there is a script that only lists functions:
 
 ```bash
 npm run verify:android-app-functions
 ```
 
-## Licença
+## License
 
 MIT
