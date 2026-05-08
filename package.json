@@ -46,7 +46,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "expo-modules-core": ">=2.3.0"
+    "expo-modules-core": "^55.0.25"
   },
   "peerDependencies": {
     "expo": ">=55.0.0"
