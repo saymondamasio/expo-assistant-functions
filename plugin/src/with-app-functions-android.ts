@@ -15,6 +15,102 @@ import { generateAppFunctionsKotlin } from "./with-generated-sources";
 const { addMetaDataItemToMainApplication, getMainApplicationOrThrow } =
 	AndroidConfig.Manifest;
 
+const PREWARM_REGION_START = "// expo-assistant-functions prewarm start";
+const PREWARM_REGION_END = "// expo-assistant-functions prewarm end";
+const MARKED_PREWARM_REGION = new RegExp(
+	`${PREWARM_REGION_START}[\\s\\S]*?${PREWARM_REGION_END}\\n?`,
+	"gm",
+);
+const IMPORT_APP_FUNCTION_HEADLESS =
+	"import expo.modules.appfunctions.AppFunctionHeadlessService";
+
+const ASSISTANT_FUNCTIONS_META_KEYS = [
+	"expo.modules.appfunctions.WAIT_FOR_MODULE_MS",
+	"expo.modules.appfunctions.INVOKE_TIMEOUT_MS",
+	"expo.modules.appfunctions.HEADLESS_TASK_TIMEOUT_MS",
+] as const;
+
+function applyAssistantFunctionsMetaData(
+	mainApp: AndroidConfig.Manifest.ManifestApplication,
+	props: AppFunctionsPluginProps,
+): void {
+	const waitMs = props.coldStartTimeoutMs ?? 60_000;
+	const invokeMs = props.invokeTimeoutMs ?? 45_000;
+	const headlessMs = props.headlessTaskTimeoutMs ?? 60_000;
+
+	const mainAppAny = mainApp as Record<string, unknown>;
+	const existingMeta = (mainAppAny["meta-data"] ?? []) as Array<{
+		$?: Record<string, string>;
+	}>;
+	const keySet = new Set<string>(ASSISTANT_FUNCTIONS_META_KEYS);
+	const filtered = existingMeta.filter(
+		(m) => !keySet.has(m.$?.["android:name"] ?? ""),
+	);
+	const injected = [
+		{
+			$: {
+				"android:name": "expo.modules.appfunctions.WAIT_FOR_MODULE_MS",
+				"android:value": String(waitMs),
+			},
+		},
+		{
+			$: {
+				"android:name": "expo.modules.appfunctions.INVOKE_TIMEOUT_MS",
+				"android:value": String(invokeMs),
+			},
+		},
+		{
+			$: {
+				"android:name": "expo.modules.appfunctions.HEADLESS_TASK_TIMEOUT_MS",
+				"android:value": String(headlessMs),
+			},
+		},
+	];
+	mainAppAny["meta-data"] = [...filtered, ...injected];
+}
+
+function ensurePrewarmInMainApplication(
+	src: string,
+	enablePrewarm: boolean,
+): string {
+	let result = src.replace(MARKED_PREWARM_REGION, "");
+	if (!enablePrewarm) {
+		result = result.replace(
+			new RegExp(`^${IMPORT_APP_FUNCTION_HEADLESS}\\n`, "m"),
+			"",
+		);
+		return result;
+	}
+
+	if (!result.includes(IMPORT_APP_FUNCTION_HEADLESS)) {
+		const lifecycleImport = "import expo.modules.ApplicationLifecycleDispatcher";
+		if (result.includes(lifecycleImport)) {
+			result = result.replace(
+				lifecycleImport,
+				`${lifecycleImport}\n${IMPORT_APP_FUNCTION_HEADLESS}`,
+			);
+		} else {
+			const lastImport = result.lastIndexOf("import ");
+			const endOfImport = result.indexOf("\n", lastImport) + 1;
+			result = `${result.slice(0, endOfImport)}${IMPORT_APP_FUNCTION_HEADLESS}\n${result.slice(endOfImport)}`;
+		}
+	}
+
+	const onCreateAnchor =
+		/(override fun onCreate\(\)\s*\{\s*\n\s*super\.onCreate\(\))/;
+	if (onCreateAnchor.test(result)) {
+		result = result.replace(
+			onCreateAnchor,
+			`$1
+    ${PREWARM_REGION_START}
+    AppFunctionHeadlessService.start(this)
+    ${PREWARM_REGION_END}`,
+		);
+	}
+
+	return result;
+}
+
 const APPFUNCTIONS_VERSION = "1.0.0-alpha08";
 const KSP_VERSION = "2.1.20-2.0.1";
 
@@ -74,7 +170,8 @@ function patchAppBuildGradle(contents: string): string {
 }
 
 function patchAndroidManifest(
-	manifest: AndroidConfig.Manifest.AndroidManifest
+	manifest: AndroidConfig.Manifest.AndroidManifest,
+	props: AppFunctionsPluginProps,
 ): AndroidConfig.Manifest.AndroidManifest {
 	const mainApp = getMainApplicationOrThrow(manifest);
 	const existing = mainApp["meta-data"]?.find(
@@ -139,6 +236,8 @@ function patchAndroidManifest(
 		];
 	}
 
+	applyAssistantFunctionsMetaData(mainApp, props);
+
 	return manifest;
 }
 
@@ -196,10 +295,13 @@ function withProjectBuildGradleMod(
 	});
 }
 
-function withAndroidManifestMod(config: Parameters<ConfigPlugin>[0]) {
-	return withAndroidManifest(config, (config) => {
-		config.modResults = patchAndroidManifest(config.modResults);
-		return config;
+function withAndroidManifestMod(
+	config: Parameters<ConfigPlugin>[0],
+	props: AppFunctionsPluginProps,
+) {
+	return withAndroidManifest(config, (c) => {
+		c.modResults = patchAndroidManifest(c.modResults, props);
+		return c;
 	});
 }
 
@@ -410,7 +512,11 @@ function withMainApplicationMod(
 			try {
 				const contents = readFileSync(mainAppPath, "utf-8");
 				const functions = props.functions ?? [];
-				const patched = patchMainApplication(contents, functions);
+				let patched = patchMainApplication(contents, functions);
+				patched = ensurePrewarmInMainApplication(
+					patched,
+					props.prewarmHeadlessOnLaunch !== false,
+				);
 				if (patched !== contents) {
 					writeFileSync(mainAppPath, patched);
 				}
@@ -432,7 +538,7 @@ const withAppFunctionsAndroid: ConfigPlugin<AppFunctionsPluginProps> = (
 	modifiedConfig = withMainApplicationMod(modifiedConfig, props);
 	modifiedConfig = withProjectBuildGradleMod(modifiedConfig, props);
 	modifiedConfig = withAppBuildGradleMod(modifiedConfig, props);
-	modifiedConfig = withAndroidManifestMod(modifiedConfig);
+	modifiedConfig = withAndroidManifestMod(modifiedConfig, props);
 	modifiedConfig = withPlatformAppFunctionServiceEnabled(modifiedConfig);
 	return modifiedConfig;
 };

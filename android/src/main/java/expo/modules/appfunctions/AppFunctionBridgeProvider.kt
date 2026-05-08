@@ -16,8 +16,9 @@ class AppFunctionBridgeProvider : ContentProvider() {
             AppFunctionHeadlessService.start(context!!)
         }
 
-        // Wait for Expo module to initialize (cold start can take 5-15s)
-        val module = AppFunctionsModule.waitForInstance(60_000L)
+        val appCtx = context!!.applicationContext
+        val waitMs = ExpoAssistantFunctionsConfig.waitForModuleMs(appCtx)
+        val module = AppFunctionsModule.waitForInstance(waitMs)
 
         if (module == null) {
             return Bundle().apply {
@@ -34,7 +35,7 @@ class AppFunctionBridgeProvider : ContentProvider() {
         }
 
         val result = try {
-            module.invokeFunction(method, params)
+            module.invokeFunction(method, params, appCtx)
         } catch (e: Exception) {
             """{"error":"${e.message}"}"""
         }

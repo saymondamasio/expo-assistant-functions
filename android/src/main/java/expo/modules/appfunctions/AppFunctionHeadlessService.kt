@@ -18,10 +18,11 @@ class AppFunctionHeadlessService : HeadlessJsTaskService() {
     }
 
     override fun getTaskConfig(intent: Intent?): HeadlessJsTaskConfig? {
+        val taskTimeoutMs = ExpoAssistantFunctionsConfig.headlessTaskTimeoutMs(this)
         return HeadlessJsTaskConfig(
             TASK_NAME,
             Arguments.createMap(),
-            60_000, // timeout 60s
+            taskTimeoutMs,
             true, // allowedInForeground
         )
     }

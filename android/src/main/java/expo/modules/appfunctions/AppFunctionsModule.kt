@@ -1,5 +1,6 @@
 package expo.modules.appfunctions
 
+import android.content.Context
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.CompletableDeferred
@@ -45,7 +46,7 @@ class AppFunctionsModule : Module() {
         }
     }
 
-    fun invokeFunction(name: String, params: Map<String, Any?>): String {
+    fun invokeFunction(name: String, params: Map<String, Any?>, hostContext: Context): String {
         val callId = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<String>()
         pendingCalls[callId] = deferred
@@ -56,10 +57,12 @@ class AppFunctionsModule : Module() {
             "params" to params
         ))
 
+        val timeoutMs = ExpoAssistantFunctionsConfig.invokeTimeoutMs(hostContext)
         return runBlocking(Dispatchers.IO) {
             try {
-                withTimeout(30_000L) { deferred.await() }
+                withTimeout(timeoutMs) { deferred.await() }
             } catch (_: Exception) {
+                pendingCalls.remove(callId)
                 """{"error":"Function call timed out"}"""
             }
         }

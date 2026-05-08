@@ -68,8 +68,9 @@ function armHeadlessSession(
 	};
 	activeHeadless = {
 		inflight: 0,
-		// Upper bound: AppFunctionHeadlessService uses 60s HeadlessJsTaskConfig
-		safetyId: setTimeout(seal, 60_000),
+		// Upper bound: must exceed native HEADLESS_TASK_TIMEOUT_MS + invoke margin so we never
+		// finish the headless task before the ContentProvider bridge returns.
+		safetyId: setTimeout(seal, 120_000),
 		seal,
 	};
 }
