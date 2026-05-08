@@ -53,6 +53,7 @@ O plugin injeta `<meta-data>` na `<application>` para o bridge nativo ler timeou
 | `coldStartTimeoutMs` | `WAIT_FOR_MODULE_MS` | `60000` | Tempo máximo à espera do módulo nativo `AppFunctions` (RN a inicializar). |
 | `invokeTimeoutMs` | `INVOKE_TIMEOUT_MS` | `45000` | Tempo máximo até o JS chamar `handleFunctionResult` após `onFunctionCall`. |
 | `headlessTaskTimeoutMs` | `HEADLESS_TASK_TIMEOUT_MS` | `60000` | Timeout do `HeadlessJsTaskConfig` no `AppFunctionHeadlessService`. |
+| `deferAppFunctionsToWorkManager` | `DEFER_TO_WORK_MANAGER` | `false` | Se `true`, a resposta da App Function é imediata (`accepted` + `jobId`) e o bridge JS corre num job do WorkManager. |
 | `prewarmHeadlessOnLaunch` | — | `true` | Se `true`, o plugin insere `AppFunctionHeadlessService.start(this)` em `MainApplication.onCreate` para aquecer o runtime antes do primeiro pedido. |
 
 Exemplo:
@@ -65,6 +66,7 @@ Exemplo:
         "expo-assistant-functions",
         {
           "category": "myapp",
+          "deferAppFunctionsToWorkManager": false,
           "prewarmHeadlessOnLaunch": true,
           "coldStartTimeoutMs": 90000,
           "invokeTimeoutMs": 45000,
@@ -76,6 +78,8 @@ Exemplo:
   }
 }
 ```
+
+**Nota (defer + WorkManager):** com `deferAppFunctionsToWorkManager: true`, o assistente recebe logo um JSON do tipo `{"accepted":true,"jobId":"...","functionName":"...","deferred":true}` — **não** o resultado final do handler JS. O trabalho continua em background; usa isto para fugir ao timeout do Binder (~30s) / ANR no serviço em cold start.
 
 **Nota:** o comando `adb shell cmd app_function execute-app-function` pode continuar a ter um limite de ~30 s ao nível do Binder do sistema; valores maiores ajudam sobretudo quando o assistente invoca a app diretamente. O **prewarm** reduz o trabalho feito dentro da primeira invocação em cold start (menos risco de ANR no serviço).
 
