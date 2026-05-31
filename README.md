@@ -8,7 +8,7 @@ Expo module for AI-driven app intents. Define app functions in `app.json` and ex
 ## Install
 
 ```bash
-npm install expo-assistant-functions
+npx expo install expo-assistant-functions
 ```
 
 ## Configuration
